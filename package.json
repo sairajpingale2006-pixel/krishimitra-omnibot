@@ -1,7 +1,7 @@
 {
   "name": "krishimitra-bot",
-  "version": "5.0.0",
-  "description": "AI Farming Assistant for DIPEX 2026",
+  "version": "1.0.0",
+  "description": "AI Farming Assistant",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -11,7 +11,5 @@
   },
   "engines": {
     "node": "18.x"
-  },
-  "author": "DIPEX Winning Team",
-  "license": "MIT"
+  }
 }
