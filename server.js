@@ -1,140 +1,146 @@
-// 🚀 KRISHI-MITRA – RENDER SAFE MULTIMODAL SERVER
-
-const express = require('express');
-const multer = require('multer');
-
+const express = require("express");
 const app = express();
 
-// IMPORTANT: order matters
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Multer (Render safe)
-const upload = multer({
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
-});
+// ---------------- SESSION MEMORY ----------------
+const sessions = new Map();
 
-// ===================== UTIL =====================
-function section(title) {
-  return `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${title}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+// ---------------- CORE RESPONSE ENGINE ----------------
+function buildResponse(title, points, suggestion) {
+  let text = `${title}\n`;
+  text += "────────────────────\n\n";
+
+  points.forEach(point => {
+    text += `• ${point}\n`;
+  });
+
+  if (suggestion) {
+    text += `\n────────────────────\n${suggestion}`;
+  }
+
+  return text;
 }
 
-// ===================== AI HANDLERS =====================
-function textAI(text) {
-  return (
-    section('💬 TEXT INPUT RECEIVED') +
-`"${text}"
+// ---------------- INTENT HANDLER ----------------
+function handleTextMessage(message, sessionId) {
+  if (!sessions.has(sessionId)) {
+    sessions.set(sessionId, { history: [] });
+  }
 
-AI STATUS
-• Text understood
-• Ready for analysis
-`
+  const session = sessions.get(sessionId);
+  session.history.push(message);
+  if (session.history.length > 6) session.history.shift();
+
+  const text = message.toLowerCase();
+
+  // -------- GREETING --------
+  if (text.includes("hello") || text.includes("hi")) {
+    return buildResponse(
+      "Welcome",
+      [
+        "I can help with crop-related questions",
+        "You can ask about prices, diseases, or farming decisions",
+        "Responses are simple and practical"
+      ],
+      "Example: tomato price today"
+    );
+  }
+
+  // -------- MARKET --------
+  if (text.includes("price") || text.includes("market")) {
+    return buildResponse(
+      "Current Market Overview",
+      [
+        "Tomato: ₹1800 – ₹2400 per quintal",
+        "Onion: ₹2800 – ₹3400 per quintal",
+        "Demand is stable in most regions"
+      ],
+      "Suggestion: Monitor prices for the next few days before selling"
+    );
+  }
+
+  // -------- CROP ISSUE --------
+  if (
+    text.includes("disease") ||
+    text.includes("leaf") ||
+    text.includes("yellow") ||
+    text.includes("pest")
+  ) {
+    return buildResponse(
+      "Crop Health Observation",
+      [
+        "Symptoms may indicate pest or nutrient stress",
+        "Early treatment improves recovery chances",
+        "Accurate diagnosis requires visual confirmation"
+      ],
+      "Next step: Share a clear photo of the affected plant"
+    );
+  }
+
+  // -------- HELP --------
+  if (text.includes("help")) {
+    return buildResponse(
+      "How I Can Assist",
+      [
+        "Crop health guidance",
+        "Market price insights",
+        "Basic farming recommendations",
+        "Clear and simple explanations"
+      ],
+      "Ask your question in your own words"
+    );
+  }
+
+  // -------- FALLBACK --------
+  return buildResponse(
+    "Information Received",
+    [
+      "Your message has been noted",
+      "More details will help give a better answer"
+    ],
+    "Please provide a little more information"
   );
 }
 
-function imageAI(file) {
-  return (
-    section('📸 IMAGE INPUT RECEIVED') +
-`FILE INFO
-• Name: ${file.originalname}
-• Type: ${file.mimetype}
-
-AI READY
-• Disease detection
-• Pest analysis
-`
-  );
-}
-
-function audioAI(file) {
-  return (
-    section('🎤 AUDIO INPUT RECEIVED') +
-`FILE INFO
-• Name: ${file.originalname}
-• Type: ${file.mimetype}
-
-AI READY
-• Speech to text
-• Emotion analysis
-`
-  );
-}
-
-function videoAI(file) {
-  return (
-    section('🎬 VIDEO INPUT RECEIVED') +
-`FILE INFO
-• Name: ${file.originalname}
-• Type: ${file.mimetype}
-
-AI READY
-• Motion tracking
-• Damage analysis
-`
-  );
-}
-
-function documentAI(file) {
-  return (
-    section('📄 DOCUMENT INPUT RECEIVED') +
-`FILE INFO
-• Name: ${file.originalname}
-• Type: ${file.mimetype}
-
-AI READY
-• OCR
-• Data extraction
-`
-  );
-}
-
-// ===================== WEBHOOK =====================
-app.post('/webhook', upload.single('file'), (req, res) => {
+// ---------------- WEBHOOK ----------------
+app.post("/webhook", (req, res) => {
   try {
-    let reply = '';
+    const sessionId =
+      req.body.session || "default-session";
 
-    if (req.body && req.body.text) {
-      reply = textAI(req.body.text);
-    }
-    else if (req.file) {
-      const type = req.file.mimetype || '';
+    const userText =
+      req.body.queryResult?.queryText ||
+      req.body.message ||
+      "";
 
-      if (type.startsWith('image/')) reply = imageAI(req.file);
-      else if (type.startsWith('audio/')) reply = audioAI(req.file);
-      else if (type.startsWith('video/')) reply = videoAI(req.file);
-      else reply = documentAI(req.file);
-    }
-    else {
-      reply =
-        section('🤖 KRISHI-MITRA AI ONLINE') +
-`Send:
-• Text
-• Image
-• Audio
-• Video
-• PDF
-`;
-    }
+    const reply = handleTextMessage(userText, sessionId);
 
-    res.status(200).json({ fulfillmentText: reply });
-
+    res.json({
+      fulfillmentText: reply
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ fulfillmentText: 'Internal server error' });
+    res.json({
+      fulfillmentText:
+        "Sorry, something went wrong. Please try again."
+    });
   }
 });
 
-// ===================== HEALTH =====================
-app.get('/', (req, res) => {
-  res.send('✅ Krishi-Mitra AI is running');
+// ---------------- HEALTH CHECK ----------------
+app.get("/", (req, res) => {
+  res.send("Krishi-Mitra server is running");
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', uptime: process.uptime() });
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    uptime: process.uptime()
+  });
 });
 
-// ===================== START =====================
+// ---------------- START SERVER ----------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
