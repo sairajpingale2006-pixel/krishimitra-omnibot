@@ -1,49 +1,42 @@
 const express = require("express");
-const multer = require("multer");
 const axios = require("axios");
-const fs = require("fs");
 
 const app = express();
-const upload = multer({ dest: "uploads/" });
-
 app.use(express.json());
-
-const IMAGE_API_URL = "https://krishi-mitra-image.onrender.com/upload";
 
 app.get("/", (req, res) => {
   res.json({ status: "Omnibot running" });
 });
 
-// Image upload from user → forward to image AI service
-app.post("/analyze-image", upload.single("image"), async (req, res) => {
+// TEXT CHAT
+app.post("/chat", async (req, res) => {
+  const { message } = req.body;
+
+  if (!message) {
+    return res.status(400).json({ error: "Message required" });
+  }
+
+  // Simple AI-style response (can be upgraded)
+  const reply = `Based on your input: "${message}", here is a helpful response.`;
+
+  res.json({ reply });
+});
+
+// IMAGE → FORWARD TO IMAGE SERVICE
+app.post("/image-result", async (req, res) => {
   try {
-    const imagePath = req.file.path;
+    const imageServiceURL =
+      "https://krishi-mitra-image.onrender.com/analyze-image";
 
-    const imageData = fs.createReadStream(imagePath);
+    const response = await axios.post(imageServiceURL, req.body);
 
-    const response = await axios.post(
-      IMAGE_API_URL,
-      { image: imageData },
-      { headers: { "Content-Type": "multipart/form-data" } }
-    );
-
-    fs.unlinkSync(imagePath); // delete temp file
-
-    res.json({
-      success: true,
-      analysis: response.data
-    });
-
+    res.json(response.data);
   } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Image analysis failed",
-      error: err.message
-    });
+    res.status(500).json({ error: "Image service unavailable" });
   }
 });
 
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Omnibot running on port", PORT);
 });
